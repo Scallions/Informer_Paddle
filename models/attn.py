@@ -53,7 +53,7 @@ class ProbAttention(nn.Module):
         K_expand = K.unsqueeze(-3).expand(B, H, L_Q, L_K, E)
         index_sample = torch.randint(L_K, (L_Q, sample_k)) # real U = U_part(factor*ln(L_k))*L_q
         K_sample = K_expand[:, :, torch.arange(L_Q).unsqueeze(1), index_sample, :]
-        Q_K_sample = torch.matmul(Q.unsqueeze(-2), K_sample.transpose(-2, -1)).squeeze()
+        Q_K_sample = torch.matmul(Q.unsqueeze(-2), K_sample.transpose(-2, -1)).squeeze(-2)
 
         # find the Top_k query with sparisty measurement
         M = Q_K_sample.max(-1)[0] - torch.div(Q_K_sample.sum(-1), L_K)
@@ -89,9 +89,9 @@ class ProbAttention(nn.Module):
 
         context_in[torch.arange(B)[:, None, None],
                    torch.arange(H)[None, :, None],
-                   index, :] = torch.matmul(attn, V)
+                   index, :] = torch.matmul(attn, V).type_as(context_in)
         if self.output_attention:
-            attns = (torch.ones([B, H, L_V, L_V])/L_V).double().to(attn.device)
+            attns = (torch.ones([B, H, L_V, L_V])/L_V).type_as(attn).to(attn.device)
             attns[torch.arange(B)[:, None, None], torch.arange(H)[None, :, None], index, :] = attn
             return (context_in, attns)
         else:
@@ -101,12 +101,15 @@ class ProbAttention(nn.Module):
         B, L_Q, H, D = queries.shape
         _, L_K, _, _ = keys.shape
 
-        queries = queries.view(B, H, L_Q, -1)
-        keys = keys.view(B, H, L_K, -1)
-        values = values.view(B, H, L_K, -1)
+        queries = queries.transpose(2,1)
+        keys = keys.transpose(2,1)
+        values = values.transpose(2,1)
 
         U_part = self.factor * np.ceil(np.log(L_K)).astype('int').item() # c*ln(L_k)
         u = self.factor * np.ceil(np.log(L_Q)).astype('int').item() # c*ln(L_q) 
+
+        U_part = U_part if U_part<L_K else L_K
+        u = u if u<L_Q else L_Q
         
         scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u) 
 
@@ -119,12 +122,12 @@ class ProbAttention(nn.Module):
         # update the context with selected top_k queries
         context, attn = self._update_context(context, values, scores_top, index, L_Q, attn_mask)
         
-        return context.contiguous(), attn
+        return context.transpose(2,1).contiguous(), attn
 
 
 class AttentionLayer(nn.Module):
-    def __init__(self, attention, d_model, n_heads, d_keys=None,
-                 d_values=None):
+    def __init__(self, attention, d_model, n_heads, 
+                 d_keys=None, d_values=None, mix=False):
         super(AttentionLayer, self).__init__()
 
         d_keys = d_keys or (d_model//n_heads)
@@ -136,6 +139,7 @@ class AttentionLayer(nn.Module):
         self.value_projection = nn.Linear(d_model, d_values * n_heads)
         self.out_projection = nn.Linear(d_values * n_heads, d_model)
         self.n_heads = n_heads
+        self.mix = mix
 
     def forward(self, queries, keys, values, attn_mask):
         B, L, _ = queries.shape
@@ -152,6 +156,8 @@ class AttentionLayer(nn.Module):
             values,
             attn_mask
         )
+        if self.mix:
+            out = out.transpose(2,1).contiguous()
         out = out.view(B, L, -1)
 
         return self.out_projection(out), attn
