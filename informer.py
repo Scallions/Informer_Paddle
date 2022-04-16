@@ -1,14 +1,14 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import paddle
+import paddle.nn as nn
+import paddle.nn.functional as F
 
-from ..utils.masking import TriangularCausalMask, ProbMask
-from ..models.encoder import Encoder, EncoderLayer, ConvLayer, EncoderStack
-from ..models.decoder import Decoder, DecoderLayer
-from ..models.attn import FullAttention, ProbAttention, AttentionLayer
-from ..models.embed import DataEmbedding
+from .utils.masking import TriangularCausalMask, ProbMask
+from .models.encoder import Encoder, EncoderLayer, ConvLayer, EncoderStack
+from .models.decoder import Decoder, DecoderLayer
+from .models.attn import FullAttention, ProbAttention, AttentionLayer
+from .models.embed import DataEmbedding
 
-class Informer(nn.Module):
+class Informer(nn.Layer):
     def __init__(self, enc_in, dec_in, c_out, seq_len, label_len, out_len,
                 factor=5, d_model=512, n_heads=8, e_layers=3, d_layers=2, d_ff=512,
                 dropout=0.0, attn='prob', embed='fixed', freq='h', activation='gelu',
