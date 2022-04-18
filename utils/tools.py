@@ -1,5 +1,5 @@
 import numpy as np
-import torch
+import paddle
 
 def adjust_learning_rate(optimizer, epoch, args):
     # lr = args.learning_rate * (0.2 ** (epoch // 2))
@@ -7,7 +7,7 @@ def adjust_learning_rate(optimizer, epoch, args):
         lr_adjust = {epoch: args.learning_rate * (0.5 ** ((epoch-1) // 1))}
     elif args.lradj=='type2':
         lr_adjust = {
-            2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6, 
+            2: 5e-5, 4: 1e-5, 6: 5e-6, 8: 1e-6,
             10: 5e-7, 15: 1e-7, 20: 5e-8
         }
     if epoch in lr_adjust.keys():
@@ -44,7 +44,7 @@ class EarlyStopping:
     def save_checkpoint(self, val_loss, model, path):
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        torch.save(model.state_dict(), path+'/'+'checkpoint.pth')
+        paddle.save(model.state_dict(), path+'/'+'checkpoint.paddle')
         self.val_loss_min = val_loss
 
 class dotdict(dict):
@@ -57,20 +57,30 @@ class StandardScaler():
     def __init__(self):
         self.mean = 0.
         self.std = 1.
-    
+
     def fit(self, data):
         self.mean = data.mean(0)
         self.std = data.std(0)
 
     def transform(self, data):
-        mean = torch.from_numpy(self.mean).type_as(data).to(data.device) if torch.is_tensor(data) else self.mean
-        std = torch.from_numpy(self.std).type_as(data).to(data.device) if torch.is_tensor(data) else self.std
+        mean = paddle.to_tensor(self.mean).cast(data.dtype) if paddle.is_tensor(data) else self.mean
+        std = paddle.to_tensor(self.std).cast(data.dtype) if paddle.is_tensor(data) else self.std
         return (data - mean) / std
 
     def inverse_transform(self, data):
-        mean = torch.from_numpy(self.mean).type_as(data).to(data.device) if torch.is_tensor(data) else self.mean
-        std = torch.from_numpy(self.std).type_as(data).to(data.device) if torch.is_tensor(data) else self.std
+        mean = paddle.to_tensor(self.mean).cast(data.dtype) if paddle.is_tensor(data) else self.mean
+        std = paddle.to_tensor(self.std).cast(data.dtype) if paddle.is_tensor(data) else self.std
         if data.shape[-1] != mean.shape[-1]:
             mean = mean[-1:]
             std = std[-1:]
         return (data * std) + mean
+
+
+def swap_shape(data, dim0, dim1):
+    shape = data.shape
+    perm = list(range(len(shape)))
+    dim0 = (dim0 + len(shape)) if dim0 < 0 else dim0
+    dim1 = (dim1 + len(shape)) if dim1 < 0 else dim1
+    perm[dim0] = dim1
+    perm[dim1] = dim0
+    return perm

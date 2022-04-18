@@ -8,12 +8,15 @@ from .models.decoder import Decoder, DecoderLayer
 from .models.attn import FullAttention, ProbAttention, AttentionLayer
 from .models.embed import DataEmbedding
 
+from ..libs import manager
+
+@manager.MODELS.add_component
 class Informer(nn.Layer):
     def __init__(self, enc_in, dec_in, c_out, seq_len, label_len, out_len,
                 factor=5, d_model=512, n_heads=8, e_layers=3, d_layers=2, d_ff=512,
                 dropout=0.0, attn='prob', embed='fixed', freq='h', activation='gelu',
                 output_attention = False, distil=True, mix=True,
-                device=torch.device('cuda:0')):
+                device='cuda:0'):
         super(Informer, self).__init__()
         self.pred_len = out_len
         self.attn = attn
@@ -41,7 +44,7 @@ class Informer(nn.Layer):
                     d_model
                 ) for l in range(e_layers-1)
             ] if distil else None,
-            norm_layer=torch.nn.LayerNorm(d_model)
+            norm_layer=paddle.nn.LayerNorm(d_model)
         )
         # Decoder
         self.decoder = Decoder(
@@ -58,11 +61,11 @@ class Informer(nn.Layer):
                 )
                 for l in range(d_layers)
             ],
-            norm_layer=torch.nn.LayerNorm(d_model)
+            norm_layer=nn.LayerNorm(d_model)
         )
-        # self.end_conv1 = nn.Conv1d(in_channels=label_len+out_len, out_channels=out_len, kernel_size=1, bias=True)
-        # self.end_conv2 = nn.Conv1d(in_channels=d_model, out_channels=c_out, kernel_size=1, bias=True)
-        self.projection = nn.Linear(d_model, c_out, bias=True)
+        # self.end_conv1 = nn.Conv1d(in_channels=label_len+out_len, out_channels=out_len, kernel_size=1, bias_attr=True)
+        # self.end_conv2 = nn.Conv1d(in_channels=d_model, out_channels=c_out, kernel_size=1, bias_attr=True)
+        self.projection = nn.Linear(d_model, c_out, bias_attr=True)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,
                 enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None):
@@ -81,12 +84,13 @@ class Informer(nn.Layer):
             return dec_out[:,-self.pred_len:,:] # [B, L, D]
 
 
-class InformerStack(nn.Module):
+@manager.MODELS.add_component
+class InformerStack(nn.Layer):
     def __init__(self, enc_in, dec_in, c_out, seq_len, label_len, out_len,
                 factor=5, d_model=512, n_heads=8, e_layers=[3,2,1], d_layers=2, d_ff=512,
                 dropout=0.0, attn='prob', embed='fixed', freq='h', activation='gelu',
                 output_attention = False, distil=True, mix=True,
-                device=torch.device('cuda:0')):
+                device='cuda:0'):
         super(InformerStack, self).__init__()
         self.pred_len = out_len
         self.attn = attn
@@ -117,7 +121,7 @@ class InformerStack(nn.Module):
                         d_model
                     ) for l in range(el-1)
                 ] if distil else None,
-                norm_layer=torch.nn.LayerNorm(d_model)
+                norm_layer=nn.LayerNorm(d_model)
             ) for el in e_layers]
         self.encoder = EncoderStack(encoders, inp_lens)
         # Decoder
@@ -135,11 +139,11 @@ class InformerStack(nn.Module):
                 )
                 for l in range(d_layers)
             ],
-            norm_layer=torch.nn.LayerNorm(d_model)
+            norm_layer=nn.LayerNorm(d_model)
         )
-        # self.end_conv1 = nn.Conv1d(in_channels=label_len+out_len, out_channels=out_len, kernel_size=1, bias=True)
-        # self.end_conv2 = nn.Conv1d(in_channels=d_model, out_channels=c_out, kernel_size=1, bias=True)
-        self.projection = nn.Linear(d_model, c_out, bias=True)
+        # self.end_conv1 = nn.Conv1d(in_channels=label_len+out_len, out_channels=out_len, kernel_size=1, bias_attr=True)
+        # self.end_conv2 = nn.Conv1d(in_channels=d_model, out_channels=c_out, kernel_size=1, bias_attr=True)
+        self.projection = nn.Linear(d_model, c_out, bias_attr=True)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,
                 enc_self_mask=None, dec_self_mask=None, dec_enc_mask=None):
