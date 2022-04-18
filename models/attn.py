@@ -28,7 +28,7 @@ class FullAttention(nn.Layer):
                 attn_mask = TriangularCausalMask(B, L, device=paddle.device.get_device())
 
             # scores.masked_fill_(attn_mask.mask, -np.inf)
-            scores = paddle.where(attn_mask.mask, -np.inf*paddle.ones_like(scores), scores)
+            scores = paddle.where(attn_mask.mask.tile([1,H,1,1]), -np.inf*paddle.ones_like(scores), scores)
 
         A = self.dropout(F.softmax(scale * scores, axis=-1))
         V = paddle.einsum("bhls,bshd->blhd", A, values)
