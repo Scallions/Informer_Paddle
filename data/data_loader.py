@@ -17,7 +17,7 @@ from ...libs import manager
 @manager.DATASETS.add_component
 class Dataset_hour(Dataset):
     def __init__(self, root_path, flag='train', size=None,
-                 features='M', data_path='dataset/pwv_1h_hz_grl_filter_miss.csv',
+                 features='M', data_path='dataset/remove_trend.csv',
                  target='', scale=True, inverse=False, timeenc=0, freq='h', cols=None):
         # size [seq_len, label_len, pred_len]
         # info
@@ -49,9 +49,9 @@ class Dataset_hour(Dataset):
         self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
-        total = df_raw.shape[0] - 8*30*24
-        border1s = [0, total-12*30*24 - self.seq_len, 12*30*24+4*30*24 - self.seq_len]
-        border2s = [total-12*30*24, total-12*30*24+4*30*24, 12*30*24+8*30*24]
+        total = df_raw.shape[0]
+        border1s = [0, total-1*13*30*24 - self.seq_len, 12*30*24+4*30*24 - self.seq_len]
+        border2s = [total-1*13*30*24, total-96, 12*30*24+8*30*24]
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 
@@ -70,6 +70,7 @@ class Dataset_hour(Dataset):
 
         df_stamp = df_raw[['time']][border1:border2]
         df_stamp['time'] = pd.to_datetime(df_stamp.time)
+        self.df_stamp = df_stamp
         data_stamp = time_features(df_stamp, timeenc=self.timeenc, freq=self.freq)
 
         self.data_x = data[border1:border2]
